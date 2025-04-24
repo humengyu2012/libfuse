@@ -320,8 +320,9 @@ int fuse_main_real_fd(int argc, char *argv[], const struct fuse_operations *op,
 		res = 3;
 		goto out1;
 	}
-	session = fuse_get_session(fuse)
-	int fd = opts.mount_fd;
+	session = fuse_get_session(fuse);
+	int fd;
+	fd = opts.mount_fd;
 	if (fd == -1) {
 		if (fuse_mount(fuse,opts.mountpoint) != 0) {
 			res = 4;
