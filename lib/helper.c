@@ -279,7 +279,7 @@ int fuse_daemonize(int foreground)
 }
 
 int fuse_main_real_fd(int argc, char *argv[], const struct fuse_operations *op,
-		   size_t op_size, void *user_data, struct fuse_session *session)
+		   size_t op_size, void *user_data, struct fuse_session **session_ptr)
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse *fuse;
@@ -320,7 +320,8 @@ int fuse_main_real_fd(int argc, char *argv[], const struct fuse_operations *op,
 		res = 3;
 		goto out1;
 	}
-	session = fuse_get_session(fuse);
+	struct fuse_session *sess = fuse_get_session(fuse);
+	*session_ptr = sess;
 	int fd;
 	fd = opts.mount_fd;
 	if (fd == -1) {

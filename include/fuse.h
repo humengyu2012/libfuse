@@ -1107,7 +1107,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		   size_t op_size, void *private_data);
 
 int fuse_main_real_fd(int argc, char *argv[], const struct fuse_operations *op,
-			   size_t op_size, void *private_data, struct fuse_session *session);
+			   size_t op_size, void *private_data, struct fuse_session **session_ptr);
 
 /**
  * Start the cleanup thread when using option "remember".
