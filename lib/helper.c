@@ -50,6 +50,7 @@ static const struct fuse_opt fuse_helper_opts[] = {
 #endif
 	FUSE_HELPER_OPT("clone_fd",	clone_fd),
 	FUSE_HELPER_OPT("max_idle_threads=%u", max_idle_threads),
+	FUSE_HELPER_OPT("mount_fd=%u", mount_fd),
 	FUSE_OPT_END
 };
 
@@ -205,6 +206,7 @@ int fuse_parse_cmdline(struct fuse_args *args,
 	memset(opts, 0, sizeof(struct fuse_cmdline_opts));
 
 	opts->max_idle_threads = 10;
+	opts->mount_fd = -1;
 
 	if (fuse_opt_parse(args, opts, fuse_helper_opts,
 			   fuse_helper_opt_proc) == -1)
@@ -274,6 +276,96 @@ int fuse_daemonize(int foreground)
 		(void) chdir("/");
 	}
 	return 0;
+}
+
+int fuse_main_real_fd(int argc, char *argv[], const struct fuse_operations *op,
+		   size_t op_size, void *user_data, struct fuse_session *session)
+{
+	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+	struct fuse *fuse;
+	struct fuse_cmdline_opts opts;
+	int res;
+
+	if (fuse_parse_cmdline(&args, &opts) != 0)
+		return 1;
+
+	if (opts.show_version) {
+		printf("FUSE library version %s\n", PACKAGE_VERSION);
+		fuse_lowlevel_version();
+		res = 0;
+		goto out1;
+	}
+
+	if (opts.show_help) {
+		if(args.argv[0][0] != '\0')
+			printf("usage: %s [options] <mountpoint>\n\n",
+				   args.argv[0]);
+		printf("FUSE options:\n");
+		fuse_cmdline_help();
+		fuse_lib_help(&args);
+		res = 0;
+		goto out1;
+	}
+
+	if (!opts.show_help &&
+		!opts.mountpoint) {
+		fuse_log(FUSE_LOG_ERR, "error: no mountpoint specified\n");
+		res = 2;
+		goto out1;
+		}
+
+
+	fuse = fuse_new_31(&args, op, op_size, user_data);
+	if (fuse == NULL) {
+		res = 3;
+		goto out1;
+	}
+	session = fuse_get_session(f)
+	int fd = opts.mount_fd;
+	if (fd == -1) {
+		if (fuse_mount(fuse,opts.mountpoint) != 0) {
+			res = 4;
+			goto out2;
+		}
+	} else {
+		if (fuse_mount_fd(fuse,opts.mountpoint,fd) != 0) {
+			res = 4;
+			goto out2;
+		}
+	}
+
+
+	if (fuse_daemonize(opts.foreground) != 0) {
+		res = 5;
+		goto out3;
+	}
+
+	struct fuse_session *se = fuse_get_session(fuse);
+	if (fuse_set_signal_handlers(se) != 0) {
+		res = 6;
+		goto out3;
+	}
+
+	if (opts.singlethread)
+		res = fuse_loop(fuse);
+	else {
+		struct fuse_loop_config loop_config;
+		loop_config.clone_fd = opts.clone_fd;
+		loop_config.max_idle_threads = opts.max_idle_threads;
+		res = fuse_loop_mt_32(fuse, &loop_config);
+	}
+	if (res)
+		res = 7;
+
+	fuse_remove_signal_handlers(se);
+	out3:
+		fuse_unmount(fuse);
+	out2:
+		fuse_destroy(fuse);
+	out1:
+		free(opts.mountpoint);
+	fuse_opt_free_args(&args);
+	return res;
 }
 
 int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,

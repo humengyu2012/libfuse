@@ -962,6 +962,8 @@ struct fuse *fuse_new(struct fuse_args *args, const struct fuse_operations *op,
  **/
 int fuse_mount(struct fuse *f, const char *mountpoint);
 
+int fuse_mount_fd(struct fuse *f, const char *mountpoint, int fd);
+
 /**
  * Unmount a FUSE file system.
  *

@@ -1878,6 +1878,7 @@ struct fuse_cmdline_opts {
 	int show_help;
 	int clone_fd;
 	unsigned int max_idle_threads;
+	int mount_fd;
 };
 
 /**
@@ -1942,6 +1943,8 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
  * @return 0 on success, -1 on failure.
  **/
 int fuse_session_mount(struct fuse_session *se, const char *mountpoint);
+
+int fuse_session_mount_fd(struct fuse_session *se, const char *mountpoint, int fd);
 
 /**
  * Enter a single threaded, blocking event loop.

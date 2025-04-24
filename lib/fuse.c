@@ -5117,6 +5117,9 @@ int fuse_mount(struct fuse *f, const char *mountpoint) {
 	return fuse_session_mount(fuse_get_session(f), mountpoint);
 }
 
+int fuse_mount_fd(struct fuse *f, const char *mountpoint, int fd) {
+	return fuse_session_mount_fd(fuse_get_session(f), mountpoint, fd);
+}
 
 void fuse_unmount(struct fuse *f) {
 	fuse_session_unmount(fuse_get_session(f));

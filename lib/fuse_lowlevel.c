@@ -3007,6 +3007,58 @@ out1:
 	return NULL;
 }
 
+int fuse_session_mount_fd(struct fuse_session *se, const char *mountpoint, int fd)
+{
+
+	/*
+	 * Make sure file descriptors 0, 1 and 2 are open, otherwise chaos
+	 * would ensue.
+	 */
+	if (fd == -1) {
+		do {
+			fd = open("/dev/null", O_RDWR);
+			if (fd > 2)
+				close(fd);
+		} while (fd >= 0 && fd <= 2);
+	}
+
+
+	/*
+	 * To allow FUSE daemons to run without privileges, the caller may open
+	 * /dev/fuse before launching the file system and pass on the file
+	 * descriptor by specifying /dev/fd/N as the mount point. Note that the
+	 * parent process takes care of performing the mount in this case.
+	 */
+	fd = fuse_mnt_parse_fuse_fd(mountpoint);
+	if (fd != -1) {
+		if (fcntl(fd, F_GETFD) == -1) {
+			fuse_log(FUSE_LOG_ERR,
+				"fuse: Invalid file descriptor /dev/fd/%u\n",
+				fd);
+			return -1;
+		}
+		se->fd = fd;
+		return 0;
+	}
+
+	/* Open channel */
+	fd = fuse_kern_mount(mountpoint, se->mo);
+	if (fd == -1)
+		return -1;
+	se->fd = fd;
+
+	/* Save mountpoint */
+	se->mountpoint = strdup(mountpoint);
+	if (se->mountpoint == NULL)
+		goto error_out;
+
+	return 0;
+
+	error_out:
+		fuse_kern_unmount(mountpoint, fd);
+	return -1;
+}
+
 int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 {
 	int fd;
