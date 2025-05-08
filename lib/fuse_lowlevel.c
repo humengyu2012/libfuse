@@ -3044,6 +3044,7 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 	if (fd == -1)
 		return -1;
 	se->fd = fd;
+    fprintf(stderr,"set seesion fd: %d\n", fd);
 
 	/* Save mountpoint */
 	se->mountpoint = strdup(mountpoint);
@@ -3160,5 +3161,8 @@ void fuse_session_reset(struct fuse_session *se)
 __attribute__((no_sanitize_thread))
 int fuse_session_exited(struct fuse_session *se)
 {
+	if (g_fuse_pause == 1) {
+		se->exited = 1;
+	}
 	return se->exited;
 }

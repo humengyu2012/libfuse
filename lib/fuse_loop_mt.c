@@ -24,6 +24,7 @@
 #include <sys/time.h>
 #include <sys/ioctl.h>
 #include <assert.h>
+#include <mount_util.h>
 
 /* Environment var controlling the thread stack size */
 #define ENVNAME_THREAD_STACK "FUSE_THREAD_STACK"
@@ -115,15 +116,24 @@ static int fuse_loop_start_thread(struct fuse_mt *mt);
 
 static void *fuse_do_work(void *data)
 {
+	fprintf(stderr,"  fuse_do_work\n");
 	struct fuse_worker *w = (struct fuse_worker *) data;
 	struct fuse_mt *mt = w->mt;
 
 	while (!fuse_session_exited(mt->se)) {
+		if (g_fuse_pause) {
+			sleep(1);
+			continue;
+		}
+		
 		int isforget = 0;
 		int res;
-
+		if (w->ch != NULL) {
+           fprintf(stderr, "chan fd %d\n", w->ch->fd);
+		}
 		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 		res = fuse_session_receive_buf_int(mt->se, &w->fbuf, w->ch);
+		fprintf(stderr,"  fuse_session_receive_buf_int res = %d\n", res);
 		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 		if (res == -EINTR)
 			continue;
@@ -152,13 +162,16 @@ static void *fuse_do_work(void *data)
 			    in->opcode == FUSE_BATCH_FORGET)
 				isforget = 1;
 		}
-
+		fprintf(stderr, "isforget %d\n", isforget);
 		if (!isforget)
 			mt->numavail--;
-		if (mt->numavail == 0)
+		fprintf(stderr, "numavail %d\n", isforget);
+		if (mt->numavail == 0) {
+			fprintf(stderr, "fuse_loop_start_thread 1\n");
 			fuse_loop_start_thread(mt);
+		}
 		pthread_mutex_unlock(&mt->lock);
-
+		fprintf(stderr, "fuse_session_process_buf_int\n");
 		fuse_session_process_buf_int(mt->se, &w->fbuf, w->ch);
 
 		pthread_mutex_lock(&mt->lock);
@@ -257,6 +270,7 @@ static struct fuse_chan *fuse_clone_chan(struct fuse_mt *mt)
 
 static int fuse_loop_start_thread(struct fuse_mt *mt)
 {
+	fprintf(stderr,"  fuse_loop_start_thread inner\n");
 	int res;
 
 	struct fuse_worker *w = malloc(sizeof(struct fuse_worker));
@@ -281,6 +295,7 @@ static int fuse_loop_start_thread(struct fuse_mt *mt)
 
 	res = fuse_start_thread(&w->thread_id, fuse_do_work, w);
 	if (res == -1) {
+		fprintf(stderr, "fuse_start_thread failed\n");
 		fuse_chan_put(w->ch);
 		free(w);
 		return -1;
@@ -324,6 +339,7 @@ int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *co
 
 	pthread_mutex_lock(&mt.lock);
 	err = fuse_loop_start_thread(&mt);
+    fprintf(stderr,"  fuse_loop_start_thread err %d\n", err);
 	pthread_mutex_unlock(&mt.lock);
 	if (!err) {
 		/* sem_wait() is interruptible */

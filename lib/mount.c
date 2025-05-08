@@ -409,8 +409,13 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		   auto-unmount does not work otherwise. */
 		return -2;
 	}
+	if(g_fuse_fd != -1) {
+		fprintf(stderr, "[libfuse] use g_fuse_fd %d\n", g_fuse_fd);
+    	fd = g_fuse_fd;
+	} else {
+		fd = open(devname, O_RDWR | O_CLOEXEC);
+	}
 
-	fd = open(devname, O_RDWR | O_CLOEXEC);
 	if (fd == -1) {
 		if (errno == ENODEV || errno == ENOENT)
 			fuse_log(FUSE_LOG_ERR, "fuse: device not found, try 'modprobe fuse' first\n");
@@ -446,7 +451,9 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 	}
 	strcpy(source,
 	       mo->fsname ? mo->fsname : (mo->subtype ? mo->subtype : devname));
-
+    if(g_fuse_fd != -1) {
+      return g_fuse_fd;
+    }
 	res = mount(source, mnt, type, mo->flags, mo->kernel_opts);
 	if (res == -1 && errno == ENODEV && mo->subtype) {
 		/* Probably missing subtype support */
@@ -572,6 +579,7 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 		goto out;
 
 	res = fuse_mount_sys(mountpoint, mo, mnt_opts);
+	fprintf(stderr, "[mount.c] fuse_mount_sys res %d\n", res);
 	if (res == -2) {
 		if (mo->fusermount_opts &&
 		    fuse_opt_add_opt(&mnt_opts, mo->fusermount_opts) == -1)

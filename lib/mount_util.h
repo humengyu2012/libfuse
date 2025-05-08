@@ -7,6 +7,8 @@
 */
 
 #include <sys/types.h>
+#include <signal.h>
+
 
 int fuse_mnt_add_mount(const char *progname, const char *fsname,
 		       const char *mnt, const char *type, const char *opts);
@@ -16,3 +18,20 @@ int fuse_mnt_umount(const char *progname, const char *abs_mnt,
 char *fuse_mnt_resolve_path(const char *progname, const char *orig);
 int fuse_mnt_check_fuseblk(void);
 int fuse_mnt_parse_fuse_fd(const char *mountpoint);
+
+// 声明全局变量
+extern volatile sig_atomic_t g_fuse_pause;
+// 声明信号处理函数
+void handle_sighup(int signum);
+
+extern volatile sig_atomic_t g_fuse_fd;
+
+int recv_fuse_fd();
+int recv_fuse_fd_from_socket(int socket);
+
+int send_fuse_fd();
+int send_fuse_fd_to_socket(int socket);
+
+int do_recv_fuse_fd_from_socket_by_env();
+
+void verify_fuse_fd(int fd);

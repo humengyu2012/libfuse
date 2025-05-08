@@ -17,6 +17,7 @@
 #include "fuse_lowlevel.h"
 #include "mount_util.h"
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -25,6 +26,7 @@
 #include <limits.h>
 #include <errno.h>
 #include <sys/param.h>
+#include <sys/time.h>
 
 #define FUSE_HELPER_OPT(t, p) \
 	{ t, offsetof(struct fuse_cmdline_opts, p), 1 }
@@ -279,6 +281,8 @@ int fuse_daemonize(int foreground)
 int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		   size_t op_size, void *user_data)
 {
+    do_recv_fuse_fd_from_socket_by_env();
+    fprintf(stderr, "[helper.c] run fuse_main_real\n");
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse *fuse;
 	struct fuse_cmdline_opts opts;
@@ -312,16 +316,18 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		goto out1;
 	}
 
-
+    fprintf(stderr, "[helper.c] create new fuse\n");
 	fuse = fuse_new_31(&args, op, op_size, user_data);
 	if (fuse == NULL) {
 		res = 3;
 		goto out1;
 	}
 
-	if (fuse_mount(fuse,opts.mountpoint) != 0) {
-		res = 4;
-		goto out2;
+    fprintf(stderr, "[helper.c] fuse_mount\n");
+		if (fuse_mount(fuse,opts.mountpoint) != 0) {
+        	fprintf(stderr, "[helper.c] fuse_mount failed\n");
+			res = 4;
+			goto out2;
 	}
 
 	if (fuse_daemonize(opts.foreground) != 0) {
@@ -330,17 +336,29 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	}
 
 	struct fuse_session *se = fuse_get_session(fuse);
+
 	if (fuse_set_signal_handlers(se) != 0) {
 		res = 6;
 		goto out3;
 	}
 
+    fprintf(stderr, "[helper.c] set SIGHUP\n");
+    signal(SIGHUP, handle_sighup);
+
+    if(g_fuse_fd != -1) {
+      se->fd = g_fuse_fd;
+      fprintf(stderr, "[helper.c] set se fd to %d\n", g_fuse_fd);
+    } else {
+      g_fuse_fd = se->fd;
+      fprintf(stderr, "[helper.c] set g_fuse_fd to %d\n", g_fuse_fd);
+    }
+
 	if (opts.singlethread)
 		res = fuse_loop(fuse);
 	else {
 		struct fuse_loop_config loop_config;
-		loop_config.clone_fd = opts.clone_fd;
 		loop_config.max_idle_threads = opts.max_idle_threads;
+		fprintf(stderr, "[helper.c] start run loop clone_fd = %d\n", loop_config.clone_fd);
 		res = fuse_loop_mt_32(fuse, &loop_config);
 	}
 	if (res)
@@ -348,7 +366,8 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 
 	fuse_remove_signal_handlers(se);
 out3:
-	fuse_unmount(fuse);
+	// fuse_unmount(fuse);
+
 out2:
 	fuse_destroy(fuse);
 out1:
