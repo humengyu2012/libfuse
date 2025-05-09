@@ -527,6 +527,7 @@ static size_t id_hash(struct fuse *f, fuse_ino_t ino)
 
 static struct node *get_node_nocheck(struct fuse *f, fuse_ino_t nodeid)
 {
+	fprintf(stderr, "[fuse.c] do_node_nocheck\n");
 	size_t hash = id_hash(f, nodeid);
 	struct node *node;
 
@@ -2685,6 +2686,7 @@ static void fuse_lib_destroy(void *data)
 static void fuse_lib_lookup(fuse_req_t req, fuse_ino_t parent,
 			    const char *name)
 {
+	fprintf(stderr, "[fuse_lowlevel.c] fuse_lib_lookup\n");
 	struct fuse *f = req_fuse_prepare(req);
 	struct fuse_entry_param e;
 	char *path;

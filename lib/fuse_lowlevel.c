@@ -1131,6 +1131,7 @@ static void do_batch_forget(fuse_req_t req, fuse_ino_t nodeid,
 
 static void do_getattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
+	fprintf(stderr, "[fuse_lowlevel.c] do_getattr\n");
 	struct fuse_file_info *fip = NULL;
 	struct fuse_file_info fi;
 
@@ -2622,6 +2623,8 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 	req->ch = ch ? fuse_chan_get(ch) : NULL;
 
 	err = EIO;
+	fuse_log(FUSE_LOG_ERR, "yimin: checkpoint 1\n");
+
 	if (!se->got_init) {
 		enum fuse_opcode expected;
 
@@ -2632,6 +2635,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 		goto reply_err;
 
 	err = EACCES;
+	fuse_log(FUSE_LOG_ERR, "yimin: checkpoint 2\n");
 	/* Implement -o allow_root */
 	if (se->deny_others && in->uid != se->owner && in->uid != 0 &&
 		 in->opcode != FUSE_INIT && in->opcode != FUSE_READ &&
@@ -2654,6 +2658,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 		if (intr)
 			fuse_reply_err(intr, EAGAIN);
 	}
+	fuse_log(FUSE_LOG_ERR, "yimin: checkpoint 3\n");
 
 	if ((buf->flags & FUSE_BUF_IS_FD) && write_header_size < buf->size &&
 	    (in->opcode != FUSE_WRITE || !se->op.write_buf) &&
@@ -2676,6 +2681,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 
 		in = mbuf;
 	}
+	fuse_log(FUSE_LOG_ERR, "yimin: checkpoint 4\n");
 
 	inarg = (void *) &in[1];
 	if (in->opcode == FUSE_WRITE && se->op.write_buf)
@@ -2684,12 +2690,14 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 		do_notify_reply(req, in->nodeid, inarg, buf);
 	else
 		fuse_ll_ops[in->opcode].func(req, in->nodeid, inarg);
+	fuse_log(FUSE_LOG_ERR, "yimin: checkpoint 5\n");
 
 out_free:
 	free(mbuf);
 	return;
 
 reply_err:
+	fuse_log(FUSE_LOG_ERR, "yimin: checkpoint 6\n");
 	fuse_reply_err(req, err);
 clear_pipe:
 	if (buf->flags & FUSE_BUF_IS_FD)

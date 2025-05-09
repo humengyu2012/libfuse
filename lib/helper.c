@@ -323,11 +323,13 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		goto out1;
 	}
 
+	if(g_fuse_fd == -1) {
     fprintf(stderr, "[helper.c] fuse_mount\n");
 		if (fuse_mount(fuse,opts.mountpoint) != 0) {
         	fprintf(stderr, "[helper.c] fuse_mount failed\n");
 			res = 4;
 			goto out2;
+	}
 	}
 
 	if (fuse_daemonize(opts.foreground) != 0) {
@@ -347,6 +349,17 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 
     if(g_fuse_fd != -1) {
       se->fd = g_fuse_fd;
+	  se->got_init = 1;
+	  se->conn.proto_major = 7;
+	  se->conn.proto_minor = 31;
+	  se->conn.max_write = 131072;       // 常见上限
+	  se->conn.max_readahead = 131072;
+	  se->conn.max_background = 128;
+	  se->conn.capable = FUSE_CAP_ASYNC_READ |
+							  FUSE_CAP_WRITEBACK_CACHE |
+							  FUSE_CAP_ATOMIC_O_TRUNC;  // 按你旧进程 INIT 回复设定
+	  se->conn.want = se->conn.capable;
+	  se->mountpoint="/mnt/alluxio";
       fprintf(stderr, "[helper.c] set se fd to %d\n", g_fuse_fd);
     } else {
       g_fuse_fd = se->fd;
