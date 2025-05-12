@@ -19,6 +19,8 @@
 #include "fuse_opt.h"
 #include "fuse_misc.h"
 #include "fuse_kernel.h"
+#include "mount_util.h"
+#include "cJSON.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -5132,4 +5134,128 @@ int fuse_version(void)
 const char *fuse_pkgversion(void)
 {
 	return PACKAGE_VERSION;
+}
+
+void handle_sighup(int signum) {
+	fprintf(stderr, "[libfuse] pause by SIGHUP\n");
+	g_fuse_pause = 1;
+    sleep(3);
+	save_fuse_state(g_fuse_instance, "/tmp/fuse_state");
+	g_fuse_exit = 1;
+	int res = send_fuse_fd();
+	if (res != 0) {
+		fprintf(stderr, "[helper.c] send fd failed\n");
+	}
+	// sleep(3);
+	// exit(0);
+}
+
+void save_fuse_state(struct fuse *fuse, const char *path) {
+    cJSON *root = cJSON_CreateObject();
+    cJSON *nodes = cJSON_CreateArray();
+
+    for (size_t i = 0; i < fuse->id_table.size; i++) {
+        struct node *n = fuse->id_table.array[i];
+        if (!n) continue;
+
+		fprintf(stderr, "[libfuse] storing node id %d -> %d\n", n->nodeid, i);
+
+        cJSON *jnode = cJSON_CreateObject();
+        cJSON_AddNumberToObject(jnode, "nodeid", n->nodeid);
+        cJSON_AddNumberToObject(jnode, "parent_id", n->parent ? n->parent->nodeid : 0);
+        cJSON_AddNumberToObject(jnode, "generation", n->generation);
+        cJSON_AddStringToObject(jnode, "name", n->inline_name);
+        cJSON_AddNumberToObject(jnode, "nlookup", n->nlookup);
+        cJSON_AddNumberToObject(jnode, "size", n->size);
+        cJSON_AddNumberToObject(jnode, "mtime_sec", n->mtime.tv_sec);
+        cJSON_AddNumberToObject(jnode, "mtime_nsec", n->mtime.tv_nsec);
+		cJSON_AddNumberToObject(jnode, "open_count", n->open_count);
+        cJSON_AddItemToArray(nodes, jnode);
+    }
+
+    cJSON_AddNumberToObject(root, "ctr", fuse->ctr);
+    cJSON_AddNumberToObject(root, "generation", fuse->generation);
+    cJSON_AddItemToObject(root, "nodes", nodes);
+
+    char *json_str = cJSON_Print(root);
+    FILE *fp = fopen(path, "w");
+    if (!fp) {
+        perror("fopen (write)");
+        exit(1);
+    }
+    fputs(json_str, fp);
+    fclose(fp);
+    free(json_str);
+    cJSON_Delete(root);
+}
+
+void load_fuse_state(struct fuse *fuse, const char *path) {
+	fprintf(stderr, "[libfuse] load fuse state starts\n");
+    FILE *fp = fopen(path, "r");
+    if (!fp) {
+        perror("fopen (read)");
+        exit(1);
+    }
+
+    fseek(fp, 0, SEEK_END);
+    long len = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    char *buffer = malloc(len + 1);
+    fread(buffer, 1, len, fp);
+    buffer[len] = '\0';
+    fclose(fp);
+
+    cJSON *root = cJSON_Parse(buffer);
+    free(buffer);
+    if (!root) {
+        fprintf(stderr, "Error parsing JSON\n");
+        exit(1);
+    }
+
+    fuse->ctr = cJSON_GetObjectItem(root, "ctr")->valueint;
+    fuse->generation = cJSON_GetObjectItem(root, "generation")->valueint;
+
+    cJSON *nodes = cJSON_GetObjectItem(root, "nodes");
+    int count = cJSON_GetArraySize(nodes);
+
+    struct node **id_map = calloc(fuse->ctr + 1, sizeof(struct node *));
+
+	fprintf(stderr, "[libfuse] load fuse checkpoint 1\n");
+
+    for (int i = 0; i < count; i++) {
+        cJSON *jnode = cJSON_GetArrayItem(nodes, i);
+        struct node *n = calloc(1, sizeof(struct node));
+        n->nodeid = cJSON_GetObjectItem(jnode, "nodeid")->valueint;
+        n->generation = cJSON_GetObjectItem(jnode, "generation")->valueint;
+        n->nlookup = cJSON_GetObjectItem(jnode, "nlookup")->valuedouble;
+        n->size = cJSON_GetObjectItem(jnode, "size")->valuedouble;
+        n->mtime.tv_sec = cJSON_GetObjectItem(jnode, "mtime_sec")->valuedouble;
+        n->mtime.tv_nsec = cJSON_GetObjectItem(jnode, "mtime_nsec")->valuedouble;
+		n->open_count = cJSON_GetObjectItem(jnode, "open_count")->valueint;
+		n->parent = NULL;
+
+        const char *name = cJSON_GetObjectItem(jnode, "name")->valuestring;
+        strncpy(n->inline_name, name, sizeof(n->inline_name));
+        n->name = n->inline_name;
+
+		hash_id(fuse, n);
+        id_map[i] = n;
+    }
+
+	fprintf(stderr, "[libfuse] load fuse checkpoint 2\n");
+
+    // 恢复 parent 指针
+    for (int i = 0; i < count; i++) {
+        cJSON *jnode = cJSON_GetArrayItem(nodes, i);
+        fuse_ino_t pid = cJSON_GetObjectItem(jnode, "parent_id")->valueint;
+        if (pid > 0 && pid <= fuse->ctr)
+            id_map[i]->parent = get_node_nocheck(fuse, pid);
+    }
+
+//	fuse->ctr=fuse->ctr;
+
+    cJSON_Delete(root);
+    free(id_map);
+	fprintf(stderr, "[libfuse] load fuse state finishes\n");
 }

@@ -20,9 +20,14 @@ int fuse_mnt_check_fuseblk(void);
 int fuse_mnt_parse_fuse_fd(const char *mountpoint);
 
 // 声明全局变量
+struct fuse;
 extern volatile sig_atomic_t g_fuse_pause;
+extern volatile sig_atomic_t g_fuse_exit;
+extern volatile struct fuse* g_fuse_instance;
+
 // 声明信号处理函数
 void handle_sighup(int signum);
+void load_fuse_state(struct fuse *fuse, const char *path);
 
 extern volatile sig_atomic_t g_fuse_fd;
 

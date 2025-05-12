@@ -3169,7 +3169,7 @@ void fuse_session_reset(struct fuse_session *se)
 __attribute__((no_sanitize_thread))
 int fuse_session_exited(struct fuse_session *se)
 {
-	if (g_fuse_pause == 1) {
+	if (g_fuse_exit == 1) {
 		se->exited = 1;
 	}
 	return se->exited;

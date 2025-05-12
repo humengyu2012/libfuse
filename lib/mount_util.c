@@ -375,20 +375,11 @@ int fuse_mnt_parse_fuse_fd(const char *mountpoint)
 	return -1;
 }
 
+volatile sig_atomic_t g_fuse_exit = 0;
 volatile sig_atomic_t g_fuse_pause = 0;
+volatile struct fuse* g_fuse_instance = NULL;
 
 // 信号处理函数
-void handle_sighup(int signum) {
-	fprintf(stderr, "[libfuse] pause by SIGHUP\n");
-	g_fuse_pause = 1;
-    sleep(3);
-	int res = send_fuse_fd();
-	if (res != 0) {
-		fprintf(stderr, "[helper.c] send fd failed\n");
-	}
-	// sleep(3);
-	// exit(0);
-}
 
 #define SOCK_PATH "/tmp/alluxio_send_fuse_fd_socket"
 

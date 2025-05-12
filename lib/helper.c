@@ -345,6 +345,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	}
 
     fprintf(stderr, "[helper.c] set SIGHUP\n");
+	g_fuse_instance = fuse;
     signal(SIGHUP, handle_sighup);
 
     if(g_fuse_fd != -1) {
@@ -359,7 +360,8 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 							  FUSE_CAP_WRITEBACK_CACHE |
 							  FUSE_CAP_ATOMIC_O_TRUNC;  // 按你旧进程 INIT 回复设定
 	  se->conn.want = se->conn.capable;
-	  se->mountpoint="/mnt/alluxio";
+//	  se->mountpoint="/mnt/alluxio";
+	  load_fuse_state(fuse, "/tmp/fuse_state");
       fprintf(stderr, "[helper.c] set se fd to %d\n", g_fuse_fd);
     } else {
       g_fuse_fd = se->fd;
@@ -373,7 +375,9 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		loop_config.max_idle_threads = opts.max_idle_threads;
 		fprintf(stderr, "[helper.c] start run loop clone_fd = %d\n", loop_config.clone_fd);
 		res = fuse_loop_mt_32(fuse, &loop_config);
+		fprintf(stderr, "[helper.c] finishes run loop clone_fd = %d\n", loop_config.clone_fd);
 	}
+	fprintf(stderr, "[helper.c] fuse setting res %d to 7\n", res);
 	if (res)
 		res = 7;
 
@@ -383,9 +387,11 @@ out3:
 
 out2:
 	fuse_destroy(fuse);
+	fprintf(stderr, "[helper.c] fuse destroyed\n");
 out1:
 	free(opts.mountpoint);
 	fuse_opt_free_args(&args);
+	fprintf(stderr, "[helper.c] fuse exits %d\n", res);
 	return res;
 }
 
