@@ -5139,8 +5139,14 @@ const char *fuse_pkgversion(void)
 void handle_sighup(int signum) {
 	fprintf(stderr, "[libfuse] pause by SIGHUP\n");
 	g_fuse_pause = 1;
+	fprintf(stderr, "ioctl address %p \n", (void*)(g_fuse_instance->fs->op.ioctl));
     sleep(3);
 	save_fuse_state(g_fuse_instance, "/tmp/fuse_state");
+	struct fuse_file_info ffi = {0};
+	int ret = g_fuse_instance->fs->op.ioctl("ALLUXIO_STORE_STATE", 0, NULL, &ffi, 0, NULL);
+	fprintf(stderr, "IOCTL triggered to store state %d \n", ret);
+//	int (*ioctl) (const char *, int cmd, void *arg,
+//		      struct fuse_file_info *, unsigned int flags, void *data);
 	g_fuse_exit = 1;
 	int res = send_fuse_fd();
 	if (res != 0) {
@@ -5258,4 +5264,9 @@ void load_fuse_state(struct fuse *fuse, const char *path) {
     cJSON_Delete(root);
     free(id_map);
 	fprintf(stderr, "[libfuse] load fuse state finishes\n");
+
+		fprintf(stderr, "[libfuse] restore alluxio fuse state starts\n");
+	  struct fuse_file_info ffi = {0};
+	  fuse->fs->op.ioctl("ALLUXIO_RESTORE_STATE", 0, NULL, &ffi, 0, NULL);
+
 }
